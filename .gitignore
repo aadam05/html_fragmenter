@@ -1,0 +1,51 @@
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.swp
+
+# Virtual environment
+venv/
+env/
+.virtualenv/
+
+# VS Code settings
+.vscode/
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# Python testing
+.coverage
+.tox/
+.cache/
+nosetests.xml
+coverage.xml
+*.egg-info/
+dist/
+build/
+
+# PyInstaller
+*.spec
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+*.iml
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+*.~lock.*
