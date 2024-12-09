@@ -4,6 +4,10 @@ from typing import List, Tuple
 from html.parser import HTMLParser
 from collections.abc import Generator
 
+# Default configuration values
+html_example = './example.html'
+
+# Check command-line arguments for max length and source file
 if len(sys.argv) > 1 and sys.argv[1].startswith('--max-len'):
     MAX_LEN = int(sys.argv[1].split('=')[1])
 else:
@@ -12,26 +16,26 @@ else:
 if len(sys.argv) > 2 and sys.argv[2].endswith('.html'):
     SOURCE_FILE = sys.argv[2]
 else:
-    SOURCE_FILE = './example.html'
+    SOURCE_FILE = html_example
+
+class TagParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tokens = []
+
+    def handle_starttag(self, tag, attrs):
+        attr_str = " ".join(f'{key}="{value}"' for key, value in attrs)
+        res = f"<{tag} {attr_str}>".strip() if attrs else f'<{tag}>'
+        self.tokens.append(res)
+
+    def handle_endtag(self, tag):
+        self.tokens.append(f"</{tag}>")
+
+    def handle_data(self, data):
+        if data.strip():
+            self.tokens.append(data)
 
 def fragment_html(html, char_limit=MAX_LEN) -> Generator[str]:
-    class TagParser(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.tokens = []
-
-        def handle_starttag(self, tag, attrs):
-            attr_str = " ".join(f'{key}="{value}"' for key, value in attrs)
-            res = f"<{tag} {attr_str}>".strip() if attrs else f'<{tag}>'
-            self.tokens.append(res)
-
-        def handle_endtag(self, tag):
-            self.tokens.append(f"</{tag}>")
-
-        def handle_data(self, data):
-            if data.strip():
-                self.tokens.append(data)
-
     parser = TagParser()
     parser.feed(html)
     tokens = parser.tokens
@@ -49,27 +53,23 @@ def fragment_html(html, char_limit=MAX_LEN) -> Generator[str]:
 
     def split_text_node(text: str, free_space_for_curr_token: int, free_space_for_next_tokens: int):
         """Split long text nodes into smaller chunks."""
-
         text_chunk_for_curr_token = text[0:free_space_for_curr_token]
         text = text[free_space_for_curr_token:]
-        text_chunks = [text[i:i + free_space_for_next_tokens]
-                       for i in range(0, len(text), free_space_for_next_tokens)]
+        text_chunks = [text[i:i + free_space_for_next_tokens] for i in range(0, len(text), free_space_for_next_tokens)]
         return text_chunk_for_curr_token, text_chunks
 
     def calculate_total_block_size(char_count: int, token: str):
         """Estimate the size of a current fragment with token, including any closing tags."""
         if token.startswith("<") and not token.startswith("</"):
-            # Start tag
             tag = re.match(r"<(\w+)", token).group(1)
             return char_count + len(token) + len(f"</{tag}>") + len(close_open_tags())
         return None
 
-    pass
     for token in tokens:
         if token.startswith("<") and not token.startswith("</"):  # start tag
             tag, attrs = re.match(r"<(\w+)(.*?)>", token).group(1, 2)
             total_block_size = calculate_total_block_size(char_count, token)
-            if total_block_size > char_limit: # BUG: ты не удаляешь теги с open_tags
+            if total_block_size > char_limit:
                 current_fragment.append(close_open_tags())
                 fragments.append("".join(current_fragment))
 
@@ -91,18 +91,17 @@ def fragment_html(html, char_limit=MAX_LEN) -> Generator[str]:
             if not open_tags or open_tags[-1][0] != tag:
                 raise ValueError('Invalid HTML structure')
 
-            del open_tags[-1] # delete last opened tag
-
+            del open_tags[-1]  # delete last opened tag
             current_fragment.append(token)
             char_count += len(token)
 
         else:  # text node
             total_block_size = char_count + len(token) + len(close_open_tags())
             if total_block_size > char_limit:
-                free_space_for_curr_token: int = char_limit - (char_count + len(close_open_tags()))
+                free_space_for_curr_token = char_limit - (char_count + len(close_open_tags()))
                 if free_space_for_curr_token < 0:
-                    raise ValueError("Can't fragment an html. Meybe you should reassign limit?.")
-                free_space_for_next_tokens: int = char_limit - (len(reopen_tags()) + len(close_open_tags()))
+                    raise ValueError("Can't fragment HTML. Maybe you should reassign the limit?")
+                free_space_for_next_tokens = char_limit - (len(reopen_tags()) + len(close_open_tags()))
                 text_chunk_for_curr_token, text_chunks = split_text_node(token, free_space_for_curr_token, free_space_for_next_tokens)
 
                 current_fragment.append(text_chunk_for_curr_token)
