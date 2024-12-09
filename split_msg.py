@@ -1,11 +1,15 @@
+import re
 import sys
+from typing import List, Tuple
+from html.parser import HTMLParser
+from collections.abc import Generator
 
+html_example = './example.html'
 
-def fragment_html(html, char_limit=240):
-    import re
-    from typing import List, Tuple
-    from html.parser import HTMLParser
+MAX_LEN = int(sys.argv[1].split('=')[1]) if sys.argv[1].startswith('--max-len') else 4096
+SOURCE_FILE = sys.argv[2] if sys.argv[2].endswith('.html') else html_example
 
+def fragment_html(html, char_limit=MAX_LEN) -> Generator[str]:
     class TagParser(HTMLParser):
         def __init__(self):
             super().__init__()
@@ -13,7 +17,8 @@ def fragment_html(html, char_limit=240):
 
         def handle_starttag(self, tag, attrs):
             attr_str = " ".join(f'{key}="{value}"' for key, value in attrs)
-            self.tokens.append(f"<{tag} {attr_str}>".strip())
+            res = f"<{tag} {attr_str}>".strip() if attrs else f'<{tag}>'
+            self.tokens.append(res)
 
         def handle_endtag(self, tag):
             self.tokens.append(f"</{tag}>")
@@ -54,13 +59,18 @@ def fragment_html(html, char_limit=240):
             return char_count + len(token) + len(f"</{tag}>") + len(close_open_tags())
         return None
 
-    for idx, token in enumerate(tokens):
+    pass
+    for token in tokens:
         if token.startswith("<") and not token.startswith("</"):  # start tag
             tag, attrs = re.match(r"<(\w+)(.*?)>", token).group(1, 2)
             total_block_size = calculate_total_block_size(char_count, token)
             if total_block_size > char_limit: # BUG: ты не удаляешь теги с open_tags
                 current_fragment.append(close_open_tags())
                 fragments.append("".join(current_fragment))
+
+                if len(reopen_tags()) + len(token) + len(close_open_tags()) > char_limit:
+                    raise ValueError("Either you set a small limit, or the HTML is too deep.")
+
                 current_fragment = [reopen_tags()]
                 char_count = len(reopen_tags())
 
@@ -73,11 +83,10 @@ def fragment_html(html, char_limit=240):
         elif token.startswith("</"):  # end tag
             tag = re.match(r"</(\w+)>", token).group(1)
 
-            for index, item in enumerate(reversed(open_tags)):
-                if item[0] == tag:
-                    actual_index = len(open_tags) - 1 - index
-                    del open_tags[actual_index]
-                    break
+            if not open_tags or open_tags[-1][0] != tag:
+                raise ValueError('Invalid HTML structure')
+
+            del open_tags[-1] # delete last opened tag
 
             current_fragment.append(token)
             char_count += len(token)
@@ -85,113 +94,44 @@ def fragment_html(html, char_limit=240):
         else:  # text node
             total_block_size = char_count + len(token) + len(close_open_tags())
             if total_block_size > char_limit:
-                free_space_for_curr_token: int = char_limit - \
-                    (char_count + len(close_open_tags()))
+                free_space_for_curr_token: int = char_limit - (char_count + len(close_open_tags()))
                 if free_space_for_curr_token < 0:
-                    raise ValueError(
-                        "free_space_for_curr_token is less than 0. Check your calculations or logic.")
-                free_space_for_next_tokens: int = char_limit - \
-                    (len(reopen_tags()) + len(close_open_tags()))
-                text_chunk_for_curr_token, text_chunks = split_text_node(
-                    token, free_space_for_curr_token, free_space_for_next_tokens)
+                    raise ValueError("Can't fragment an html. Meybe you should reassign limit?.")
+                free_space_for_next_tokens: int = char_limit - (len(reopen_tags()) + len(close_open_tags()))
+                text_chunk_for_curr_token, text_chunks = split_text_node(token, free_space_for_curr_token, free_space_for_next_tokens)
 
                 current_fragment.append(text_chunk_for_curr_token)
                 current_fragment.append(close_open_tags())
                 fragments.append("".join(current_fragment))
 
-                for chunk in text_chunks:
+                for idx, chunk in enumerate(text_chunks):
                     current_fragment = [reopen_tags()]
                     current_fragment.append(chunk)
-                    current_fragment.append(close_open_tags())
-                    fragments.append("".join(current_fragment))
 
-                current_fragment = [reopen_tags()]
-                char_count = len(reopen_tags())
+                    if idx != len(text_chunks) - 1: # adding current fragments to fragments excluding last one
+                        current_fragment.append(close_open_tags())
+                        fragments.append("".join(current_fragment))
+                else:
+                    char_count = len(reopen_tags()) + len(chunk) # actualize char_count
+
             else:
                 current_fragment.append(token)
                 char_count += len(token)
 
+    if open_tags:
+        raise ValueError('Invalid HTML structure')
+
     if current_fragment:
-        current_fragment.append(close_open_tags())
         fragments.append("".join(current_fragment))
 
     return fragments
 
+def main():
+    fragments = fragment_html(open(SOURCE_FILE, 'r', encoding='utf-8').read())
 
-html_example = './example.html'
-SOURCE_FILE = sys.argv[2] if sys.argv[2].endswith('.html') else html_example
+    for idx, fragment in enumerate(fragments, 1):
+        print(f'fragment #{idx}: {len(fragment)} chars.')
+        print(f'{fragment}\n\n')
 
-fragments = fragment_html(open(SOURCE_FILE, 'r', encoding='utf-8').read())
-for idx, fragment in enumerate(fragments, 1):
-    print(f'fragment #{idx}: {len(fragment)} chars.')
-    print(f'{fragment}\n\n')
-
-
-# import sys
-# from bs4 import BeautifulSoup
-# from collections.abc import Generator
-# from html.parser import *
-
-# html_example = './example.html'
-
-# # MAX_LEN = int(sys.argv[1].split('=')[1]) if sys.argv[1].startswith('--max-len') else 4096
-# MAX_LEN = 256
-# SOURCE_FILE = sys.argv[2] if sys.argv[2].endswith('.html') else html_example
-
-# def split_message(source: str, max_len=MAX_LEN) -> Generator[str]:
-#     """
-#     Splits the original message (`source`) into fragments of the specified length (`max_len`).
-#     """
-#     soup = BeautifulSoup(source, 'html.parser')
-#     fragments = []
-#     current_fragment = ''
-#     stack: list[tuple] = []
-
-#     tag = soup.contents[0]
-#     tag_str = str(tag)
-#     while True:
-#         if not tag_str.strip():
-#             continue
-
-#         if len(tag_str) > max_len:
-#             stack.append((tag.name, tag.attrs))
-
-#         idx = 0
-#         while True:
-#             first_child_tag = tag.contents[idx]
-#             first_child_tag_str = str(first_child_tag).strip()
-
-#             if first_child_tag_str and len(current_fragment) + len(first_child_tag_str) <= max_len:
-#                 current_fragment += first_child_tag_str
-#                 first_child_tag_ref = tag.find_all(first_child_tag.name)[0]
-#                 first_child_tag_ref.decompose()
-#             elif first_child_tag_str and len(current_fragment) + len(first_child_tag_str) > max_len:
-#                 if len(first_child_tag_str) > max_len:
-#                     pass # FIXME: придумать как зайти в child и разобрать до того как
-#                     # tag = first_child_tag
-#                     # tag_str = first_child_tag_str
-#                     # stack.append((tag.name, tag.attrs))
-#                 else:
-
-#                     for i in reversed(stack):
-#                         current_fragment = f'<{i[0]} {i[1]}>' + current_fragment + f'<{i[0]}>'
-#                     fragments.append(current_fragment)
-#                     current_fragment = ''
-
-#             elif idx + 1 < len(tag.contents):
-#                 idx += 1
-#                 continue
-
-#             break
-
-#     return fragments
-
-# def main():
-#     result = split_message(open(SOURCE_FILE, 'r', encoding='utf-8'))
-
-#     # Print the fragments
-#     for i, fragment in enumerate(result):
-#         print(f"Fragment #{i + 1} ({len(fragment)} chars):\n{fragment}\n")
-
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()
