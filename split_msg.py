@@ -4,10 +4,15 @@ from typing import List, Tuple
 from html.parser import HTMLParser
 from collections.abc import Generator
 
-html_example = './example.html'
+if len(sys.argv) > 1 and sys.argv[1].startswith('--max-len'):
+    MAX_LEN = int(sys.argv[1].split('=')[1])
+else:
+    MAX_LEN = 4096
 
-MAX_LEN = int(sys.argv[1].split('=')[1]) if sys.argv[1].startswith('--max-len') else 4096
-SOURCE_FILE = sys.argv[2] if sys.argv[2].endswith('.html') else html_example
+if len(sys.argv) > 2 and sys.argv[2].endswith('.html'):
+    SOURCE_FILE = sys.argv[2]
+else:
+    SOURCE_FILE = './example.html'
 
 def fragment_html(html, char_limit=MAX_LEN) -> Generator[str]:
     class TagParser(HTMLParser):
