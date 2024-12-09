@@ -60,10 +60,13 @@ def fragment_html(html, char_limit=MAX_LEN) -> Generator[str]:
 
     def calculate_total_block_size(char_count: int, token: str):
         """Estimate the size of a current fragment with token, including any closing tags."""
-        if token.startswith("<") and not token.startswith("</"):
+        if token.startswith("<") and not token.startswith("</"):  # start tag
             tag = re.match(r"<(\w+)", token).group(1)
             return char_count + len(token) + len(f"</{tag}>") + len(close_open_tags())
-        return None
+        elif token.startswith("</"):  # end tag
+            return None
+        else:  # text node
+            return char_count + len(token) + len(close_open_tags())
 
     for token in tokens:
         if token.startswith("<") and not token.startswith("</"):  # start tag
@@ -96,7 +99,7 @@ def fragment_html(html, char_limit=MAX_LEN) -> Generator[str]:
             char_count += len(token)
 
         else:  # text node
-            total_block_size = char_count + len(token) + len(close_open_tags())
+            total_block_size = calculate_total_block_size(char_count, token)
             if total_block_size > char_limit:
                 free_space_for_curr_token = char_limit - (char_count + len(close_open_tags()))
                 if free_space_for_curr_token < 0:
