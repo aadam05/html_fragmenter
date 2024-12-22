@@ -39,7 +39,7 @@ To install this project, follow these steps:
     ```
 3. Install dependencies:
     ```bash
-    pip install -r requirements.txt
+    pip install -r requirements.txt # Create venv first
     ```
 
 ### Русский:
@@ -55,7 +55,7 @@ To install this project, follow these steps:
     ```
 3. Установите зависимости:
     ```bash
-    pip install -r requirements.txt
+    pip install -r requirements.txt # Создайте venv сначала
     ```
 
 ---
@@ -63,7 +63,7 @@ To install this project, follow these steps:
 ## Usage / Использование
 
 ```python
-python split_msg.py --max-len=4096 ./test4.html # run script / запустить скрипт
+python split_msg.py --max-len=4096 ./html_examples/test4.html # run script / запустить скрипт
 
-python -m unittest discover # run tests / запустить тесты
+python -m unittest discover -s ./tests/ # run tests / запустить тесты
 ```

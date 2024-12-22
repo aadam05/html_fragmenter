@@ -5,7 +5,7 @@ from html.parser import HTMLParser
 from collections.abc import Generator
 
 # Default configuration values
-html_example = './example.html'
+html_example = './html_examples/example.html'
 
 # Check command-line arguments for max length and source file
 if len(sys.argv) > 1 and sys.argv[1].startswith('--max-len'):
